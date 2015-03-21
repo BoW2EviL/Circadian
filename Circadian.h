@@ -21,7 +21,7 @@
 #ifndef Circadian_h
 #define Circadian_h
 
-#include "WProgram.h"
+#include "Arduino.h"
 
 
 #define CCTPD 86400L  /* ticks per day */
@@ -35,7 +35,7 @@
 class Circadian
 {
 public:
-  Circadian(byte pin, int treshold = 500);
+  Circadian(byte pin, int treshold);
 
   void sample();
   void sample(int value);
@@ -60,31 +60,32 @@ public:
   int sampleValue();
 
 private:
-  byte lightPin;
-  int lightHigh;
+  byte _lightPin;
+  int _treshold;
+  int _lightHigh;
 
-  byte state;
-  long tripTime;
-  int lastSample;
+  byte _state;
+  long _tripTime;
+  int _lastSample;
 
-  long offsetDawn;
-  long offsetDusk;
-  long offset;
-  long lastOffset;
+  long _offsetDawn;
+  long _offsetDusk;
+  long _offset;
+  long _lastOffset;
 
   /* last good */
-  long offsetDawnLG;
-  long offsetDuskLG;
-  long offsetLG;
+  long _offsetDawnLG;
+  long _offsetDuskLG;
+  long _offsetLG;
 
-  long triggerNow;
-  long triggerLast;
+  long _triggerNow;
+  long _triggerLast;
 
-  unsigned long lastSync;
-  unsigned long lastGoodSync;
-  boolean isInSyncNow;
-  boolean isInSync;
-  boolean updateOffsets;
+  unsigned long _lastSync;
+  unsigned long _lastGoodSync;
+  boolean _isInSyncNow;
+  boolean _isInSync;
+  boolean _updateOffsets;
 
   long ticks();
   void sync();
