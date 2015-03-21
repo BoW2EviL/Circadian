@@ -17,7 +17,7 @@
 
  */
 
-
+#include "Arduino.h"
 #include "Circadian.h"
 
 #define MIN_TRIP_TIME CCTIME(0, 4, 0)  // the time the sample must be stable before the state can be changed
@@ -25,24 +25,24 @@
 
 Circadian::Circadian(byte pin, int treshold)
 {
-  lightPin = pin;
-  lightHigh = treshold;
+  _lightPin = pin;
+  _lightHigh = treshold;
 
-  state = 3;  // 0:night, 1:day, 3:guess
-  tripTime = 0;
-  lastSample = 0;
+  _state = 3;  // 0:night, 1:day, 3:guess
+  _tripTime = 0;
+  _lastSample = 0;
 
-  lastSync = 0;
-  lastGoodSync = 0;
-  isInSyncNow = false;
-  isInSync = false;
-  updateOffsets = false;
+  _lastSync = 0;
+  _lastGoodSync = 0;
+  _isInSyncNow = false;
+  _isInSync = false;
+  _updateOffsets = false;
 }
 
 
 void Circadian::sample()
 {
-  int a = analogRead(lightPin);
+  int a = analogRead(_lightPin);
   sample(a);
 }
 
@@ -52,130 +52,130 @@ void Circadian::sample(int value)
   long t = ticks();
 
   // trip on sample
-  if((value <= lightHigh && lastSample > lightHigh) || (value > lightHigh && lastSample <= lightHigh))
+  if((value <= _lightHigh && _lastSample > _lightHigh) || (value > _lightHigh && _lastSample <= _lightHigh))
   {
-    tripTime = t;
+    _tripTime = t;
   }
-  lastSample = value;
+  _lastSample = value;
 
   // handle inner state
-  switch(state)
+  switch(_state)
   {
   case 3:
     // guess state
-    if(value > lightHigh)
+    if(value > _lightHigh)
     {
       // it's light: assume it's noon
-      state = 1;
-      offsetDawnLG = offsetDawn = (CCTPD + t - CCTIME(6, 0, 0)) % CCTPD;  // assume dawn was six hours ago
+      _state = 1;
+      _offsetDawnLG = _offsetDawn = (CCTPD + t - CCTIME(6, 0, 0)) % CCTPD;  // assume dawn was six hours ago
     }
     else
     {
       // it's dark: assume it's midnight
-      state = 0;
-      offsetDawnLG = offsetDawn = (CCTPD + t + CCTIME(6, 0, 0)) % CCTPD;
+      _state = 0;
+      _offsetDawnLG = _offsetDawn = (CCTPD + t + CCTIME(6, 0, 0)) % CCTPD;
     }
-    offsetDuskLG = offsetDusk = (offsetDawn + CCTIME(12, 0, 0)) % CCTPD;  // assume dusk is 12 hours after dawn
+    _offsetDuskLG = _offsetDusk = (_offsetDawn + CCTIME(12, 0, 0)) % CCTPD;  // assume dusk is 12 hours after dawn
     sync();
-    isInSyncNow = false;
-    isInSync = false;
-    offsetLG = offset;
-    lastOffset = offset;
+    _isInSyncNow = false;
+    _isInSync = false;
+    _offsetLG = _offset;
+    _lastOffset = _offset;
 
-    triggerNow = triggerLast = time();
+    _triggerNow = _triggerLast = time();
     break;
   case 0:
     // it's night
-    if(value > lightHigh && (CCTPD + t - tripTime) % CCTPD >= MIN_TRIP_TIME)
+    if(value > _lightHigh && (CCTPD + t - _tripTime) % CCTPD >= MIN_TRIP_TIME)
     {
-      state = 1;
-      offsetDawn = tripTime;
+      _state = 1;
+      _offsetDawn = _tripTime;
       sync();
     }
     break;
   case 1:
     // it's day
-    if(value <= lightHigh && (CCTPD + t - tripTime) % CCTPD >= MIN_TRIP_TIME)
+    if(value <= _lightHigh && (CCTPD + t - _tripTime) % CCTPD >= MIN_TRIP_TIME)
     {
-      state = 0;
-      offsetDusk = tripTime;
+      _state = 0;
+      _offsetDusk = _tripTime;
       sync();
     }
     break;
   }
 
   // update last good offsets after midnight
-  if(updateOffsets && isIn(CCTIME(0,0,0), CCTIME(0,15,0)))
+  if(_updateOffsets && isIn(CCTIME(0,0,0), CCTIME(0,15,0)))
   {
-    updateOffsets = false;
+    _updateOffsets = false;
     // update offsets
-    offsetDawnLG = offsetDawn;
-    offsetDuskLG = offsetDusk;
-    offsetLG = offset;
+    _offsetDawnLG = _offsetDawn;
+    _offsetDuskLG = _offsetDusk;
+    _offsetLG = _offset;
   }
 }
 
 
 void Circadian::sync()
 {
-  lastOffset = offset;
-  if(offsetDawn > offsetDusk)
+  _lastOffset = _offset;
+  if(_offsetDawn > _offsetDusk)
   {
-    offset = (offsetDusk + (offsetDawn - offsetDusk) / 2) % CCTPD;
+    _offset = (_offsetDusk + (_offsetDawn - _offsetDusk) / 2) % CCTPD;
   }
   else
   {
-    offset = (offsetDusk + (offsetDawn + CCTPD - offsetDusk) / 2) % CCTPD;
+    _offset = (_offsetDusk + (_offsetDawn + CCTPD - _offsetDusk) / 2) % CCTPD;
   }
   // are we in sync
   long sd = syncDiff();
   unsigned long m = millis();
-  isInSyncNow = (sd < MAX_SYNC_DIFF || sd > CCTPD - MAX_SYNC_DIFF) && (m - lastSync < 86400000UL);
-  lastSync = m;
+  _isInSyncNow = (sd < MAX_SYNC_DIFF || sd > CCTPD - MAX_SYNC_DIFF) && (m - _lastSync < 86400000UL);
+  _lastSync = m;
   // update last good sync
-  if(isInSyncNow)
+  if(_isInSyncNow)
   {
-    lastGoodSync = lastSync;
+    _lastGoodSync = _lastSync;
   }
   // handle last good offsets
-  if(!isInSync && !isInSyncNow)
+  if(!_isInSync && !_isInSyncNow)
   {
     // update immediately if never in sync
-    offsetDawnLG = offsetDawn;
-    offsetDuskLG = offsetDusk;
-    offsetLG = offset;
+    _offsetDawnLG = _offsetDawn;
+    _offsetDuskLG = _offsetDusk;
+    _offsetLG = _offset;
   }
-  if(isInSyncNow)
+  if(_isInSyncNow)
   {
     // set flag to update after midnight
-    updateOffsets = true;
+    _updateOffsets = true;
   }
   // is sync ever
-  if(m - lastGoodSync < 86400000UL * 28)
+  if(m - _lastGoodSync < 86400000UL * 28)
   {
-    isInSync |= isInSyncNow;
+    _isInSync |= _isInSyncNow;
   }
   else
   {
     // forget if not synchronised in 28 days
-    isInSync = false;
+    _isInSync = false;
   }
 }
 
 
 long Circadian::syncDiff()
 {
-  return (CCTPD + offset - lastOffset) % CCTPD;
+  return (CCTPD + _offset - _lastOffset) % CCTPD;
 }
 
 boolean Circadian::inSyncNow()
 {
-  return isInSyncNow;
+  return _isInSyncNow;
 }
 
 boolean Circadian::inSync()
 {
-  return isInSync;
+  return _isInSync;
 }
 
 boolean Circadian::isIn(long n, long t, long u)  // t <= n < u
@@ -201,20 +201,20 @@ boolean Circadian::isIn(long t, long u)  // t <= time() < u
 boolean Circadian::doTriggers()
 {
   long t = time();
-  if(isIn(t, triggerNow - CCTPD / 2 + 1, triggerNow + 1))
+  if(isIn(t, _triggerNow - CCTPD / 2 + 1, _triggerNow + 1))
   {
     // time hasn't moved forward yet
     return false;
   }
-  triggerLast = triggerNow;
-  triggerNow = t;
+  _triggerLast = _triggerNow;
+  _triggerNow = t;
   return true;
 }
 
 
 boolean Circadian::trigger(long t)
 {
-  return isIn(t, triggerLast + 1, triggerNow + 1);
+  return isIn(t, _triggerLast + 1, _triggerNow + 1);
 }
 
 boolean Circadian::triggerDawn(long t)
@@ -242,25 +242,25 @@ long Circadian::ticks()
 // use last good offsets
 long Circadian::time()
 {
-  return (CCTPD + ticks() - offsetLG) % CCTPD;
+  return (CCTPD + ticks() - _offsetLG) % CCTPD;
 }
 
 
 long Circadian::timeDawn()
 {
-  return (CCTPD + offsetDawnLG - offsetLG) % CCTPD;
+  return (CCTPD + _offsetDawnLG - _offsetLG) % CCTPD;
 }
 
 
 long Circadian::timeDusk()
 {
-  return (CCTPD + offsetDuskLG - offsetLG) % CCTPD;
+  return (CCTPD + _offsetDuskLG - _offsetLG) % CCTPD;
 }
 
 
 int Circadian::sampleValue()
 {
-  return lastSample;
+  return _lastSample;
 }
 
 
